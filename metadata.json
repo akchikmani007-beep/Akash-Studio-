@@ -1,0 +1,6 @@
+{
+  "name": "Akash Studio Billing",
+  "description": "Billing and financial management for Akash Photo Studio & Gift Shop with live billing calculations, photographer accounts, and payment tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

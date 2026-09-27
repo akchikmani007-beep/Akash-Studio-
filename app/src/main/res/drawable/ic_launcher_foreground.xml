@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.72"
+        android:scaleY="0.72"
+        android:translateX="15.12"
+        android:translateY="15.12">
+        <!-- Camera Body -->
+        <path
+            android:fillColor="#F8FAFC"
+            android:pathData="M86,28h-11.8l-5.4,-7.2C67.6,19.2 65.8,18 63.8,18H44.2c-2,0 -3.8,1.2 -5,2.8L33.8,28H22c-5.5,0 -10,4.5 -10,10v44c0,5.5 4.5,10 10,10h64c5.5,0 10,-4.5 10,-10V38C96,32.5 91.5,28 86,28z" />
+        <!-- Top Flash / Accent -->
+        <path
+            android:fillColor="#F59E0B"
+            android:pathData="M78,34m-4,0a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+        <!-- Outer Lens Ring -->
+        <path
+            android:fillColor="#1E293B"
+            android:pathData="M54,40c-12.15,0 -22,9.85 -22,22s9.85,22 22,22s22,-9.85 22,-22S66.15,40 54,40z" />
+        <!-- Inner Lens Aperture with Gold Accent -->
+        <path
+            android:fillColor="#3B82F6"
+            android:pathData="M54,46c-8.84,0 -16,7.16 -16,16s7.16,16 16,16s16,-7.16 16,-16S62.84,46 54,46z" />
+        <!-- Rupee Symbol in center of lens -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M49,53h10v2h-10z M49,56.5h10v2h-10z M53.5,58.5c2.5,0 4.5,-1 4.5,-2.5c0,-1.5 -2,-2.5 -4.5,-2.5H49v8.5h3.5v-3.5h1l3.5,4h3l-4,-4.5c2,-0.5 3.5,-1.8 3.5,-4c0,-2.5 -2.5,-3.5 -6,-3.5H49v3.5h4.5z" />
+    </group>
+</vector>
