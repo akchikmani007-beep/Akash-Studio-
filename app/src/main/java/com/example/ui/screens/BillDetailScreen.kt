@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +21,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -57,8 +62,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BillWithPayments
+import com.example.data.model.Company
 import com.example.data.model.PaymentRecord
 import com.example.ui.components.AddPaymentDialog
+import com.example.ui.components.CompanyLogoBadge
 import com.example.ui.components.EditPaymentDialog
 import com.example.ui.components.PaymentProgressBar
 import com.example.ui.components.PaymentStatusBadge
@@ -84,9 +91,12 @@ fun BillDetailScreen(
     val context = LocalContext.current
     val allBills by viewModel.allBills.collectAsState()
     val photographers by viewModel.allPhotographers.collectAsState()
+    val companies by viewModel.allCompanies.collectAsState()
 
     val billWithPayments = allBills.firstOrNull { it.bill.id == billId }
     val photographer = photographers.firstOrNull { it.id == billWithPayments?.bill?.photographerId }
+    val company: Company? = companies.firstOrNull { it.id == billWithPayments?.bill?.companyId }
+        ?: companies.firstOrNull { it.name.equals(billWithPayments?.bill?.companyName, ignoreCase = true) }
 
     var showAddPaymentDialog by remember { mutableStateOf(false) }
     var editingPayment by remember { mutableStateOf<PaymentRecord?>(null) }
@@ -103,7 +113,7 @@ fun BillDetailScreen(
 
     val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 
-    // Dialog: Add Payment (Requirement 10)
+    // Dialog: Add Payment
     if (showAddPaymentDialog) {
         AddPaymentDialog(
             billWithPayments = billWithPayments,
@@ -121,7 +131,7 @@ fun BillDetailScreen(
         )
     }
 
-    // Dialog: Edit Payment (Requirement 11)
+    // Dialog: Edit Payment
     editingPayment?.let { payment ->
         val otherPaymentsSum = billWithPayments.payments.filter { it.id != payment.id }.sumOf { it.amount }
         EditPaymentDialog(
@@ -137,7 +147,7 @@ fun BillDetailScreen(
         )
     }
 
-    // Dialog: Delete Payment Confirmation (Requirement 11)
+    // Dialog: Delete Payment Confirmation
     deletingPayment?.let { payment ->
         AlertDialog(
             onDismissRequest = { deletingPayment = null },
@@ -198,6 +208,8 @@ fun BillDetailScreen(
         var editDiscount by remember { mutableStateOf(billWithPayments.bill.discount.toString().replace(".0", "")) }
         var editCost by remember { mutableStateOf(billWithPayments.bill.costExpense.toString().replace(".0", "")) }
         var editCustomer by remember { mutableStateOf(billWithPayments.bill.customerName) }
+        var editPhone by remember { mutableStateOf(billWithPayments.bill.customerPhone) }
+        var editAddress by remember { mutableStateOf(billWithPayments.bill.customerAddress) }
         var editAlbum by remember { mutableStateOf(billWithPayments.bill.albumType) }
 
         val p = editPages.toIntOrNull() ?: 0
@@ -219,9 +231,23 @@ fun BillDetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
+                        value = editPhone,
+                        onValueChange = { editPhone = it },
+                        label = { Text("Customer Phone") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editAddress,
+                        onValueChange = { editAddress = it },
+                        label = { Text("Customer Address") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
                         value = editAlbum,
                         onValueChange = { editAlbum = it },
-                        label = { Text("Album Type") },
+                        label = { Text("Album Type / Service") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -278,6 +304,8 @@ fun BillDetailScreen(
                         viewModel.updateBill(
                             billWithPayments.bill.copy(
                                 customerName = editCustomer,
+                                customerPhone = editPhone,
+                                customerAddress = editAddress,
                                 albumType = editAlbum,
                                 pages = p,
                                 ratePerPage = r,
@@ -303,16 +331,33 @@ fun BillDetailScreen(
         )
     }
 
+    val companyDisplayName = company?.name ?: billWithPayments.bill.companyName.ifBlank { "Akash Photo Studio" }
+    val companyMobile = company?.mobileNumber ?: "84 46 46 0312"
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bill Details", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text(billWithPayments.displayBillNumber, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(companyDisplayName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val invoiceText = CommunicationUtils.buildInvoiceShareText(billWithPayments, company)
+                            CommunicationUtils.shareText(context, "Invoice ${billWithPayments.displayBillNumber}", invoiceText)
+                        },
+                        modifier = Modifier.testTag("share_invoice_btn")
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share Invoice")
+                    }
                     IconButton(onClick = { showEditBillDialog = true }) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit Bill")
                     }
@@ -331,10 +376,12 @@ fun BillDetailScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Requirement 7: ORDER CARD MUST SHOW ALL THREE
+            // Requirement 4 & 8: Professional Bill Header Card (Company Details)
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("bill_header_company_card"),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -343,47 +390,203 @@ fun BillDetailScreen(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = "${billWithPayments.bill.albumType} — ${billWithPayments.bill.customerName}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = "Photographer: ${billWithPayments.bill.photographerName}",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "Pages: ${billWithPayments.bill.pages}  •  Rate: ${formatRupee(billWithPayments.bill.ratePerPage)}/page",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (billWithPayments.bill.extraCharges > 0 || billWithPayments.bill.discount > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                if (company != null) {
+                                    CompanyLogoBadge(company = company, size = 46)
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = "📸", fontSize = 22.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
                                     Text(
-                                        text = "Extra: ${formatRupee(billWithPayments.bill.extraCharges)}  •  Discount: ${formatRupee(billWithPayments.bill.discount)}",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = companyDisplayName,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
+                                    if (company?.ownerName?.isNotBlank() == true) {
+                                        Text(
+                                            text = "Prop: ${company.ownerName}",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                             PaymentStatusBadge(status = billWithPayments.status)
                         }
 
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Company Contact details
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(companyMobile, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (company?.email?.isNotBlank() == true) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(company.email, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (company?.address?.isNotBlank() == true) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(company.address, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (company?.gstNumber?.isNotBlank() == true) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("GST No: ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Text(company.gstNumber, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Customer & Invoice Details (Requirement 7 & 8)
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "BILL TO (CUSTOMER)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    letterSpacing = 1.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = billWithPayments.bill.customerName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                if (billWithPayments.bill.customerPhone.isNotBlank()) {
+                                    Text(
+                                        text = "Phone: ${billWithPayments.bill.customerPhone}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (billWithPayments.bill.customerAddress.isNotBlank()) {
+                                    Text(
+                                        text = billWithPayments.bill.customerAddress,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "INVOICE DETAILS",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    letterSpacing = 1.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = billWithPayments.displayBillNumber,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = dateFormatter.format(Date(billWithPayments.bill.createdDate)),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Photog: ${billWithPayments.bill.photographerName}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Line items breakdown
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Service / Album", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Qty × Rate", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Amount", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(billWithPayments.bill.albumType, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("${billWithPayments.bill.pages} × ${formatRupee(billWithPayments.bill.ratePerPage)}", fontSize = 13.sp)
+                            Text(formatRupee(billWithPayments.bill.pages * billWithPayments.bill.ratePerPage), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+
+                        if (billWithPayments.bill.extraCharges > 0 || billWithPayments.bill.discount > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            if (billWithPayments.bill.extraCharges > 0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Extra Charges", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("+ ${formatRupee(billWithPayments.bill.extraCharges)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            if (billWithPayments.bill.discount > 0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Discount", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("- ${formatRupee(billWithPayments.bill.discount)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFDC2626))
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Three Amounts Row
+                        // Three Amounts Row (Requirement 2 & 17)
                         ThreeAmountsRow(
                             totalBill = billWithPayments.totalBill,
                             received = billWithPayments.totalReceived,
                             remaining = billWithPayments.remaining
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         // Payment Progress Bar (Requirement 13)
                         PaymentProgressBar(
@@ -395,7 +598,7 @@ fun BillDetailScreen(
                 }
             }
 
-            // Quick Actions: Add Payment, WhatsApp, Share SMS
+            // Quick Actions: Add Payment, WhatsApp, Share Invoice
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -419,12 +622,14 @@ fun BillDetailScreen(
                                 customerName = billWithPayments.bill.customerName,
                                 totalBill = billWithPayments.totalBill,
                                 received = billWithPayments.totalReceived,
-                                remaining = billWithPayments.remaining
+                                remaining = billWithPayments.remaining,
+                                companyName = companyDisplayName,
+                                companyPhone = companyMobile
                             )
                             CommunicationUtils.openWhatsApp(context, phone, msg)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                        modifier = Modifier.weight(1.1f).height(44.dp).testTag("detail_whatsapp_btn")
+                        modifier = Modifier.weight(1.2f).height(44.dp).testTag("detail_whatsapp_btn")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
                         Spacer(modifier = Modifier.width(6.dp))
@@ -433,21 +638,14 @@ fun BillDetailScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val phone = photographer?.phoneNumber ?: ""
-                            val msg = CommunicationUtils.buildWhatsAppMessage(
-                                photographerName = billWithPayments.bill.photographerName,
-                                customerName = billWithPayments.bill.customerName,
-                                totalBill = billWithPayments.totalBill,
-                                received = billWithPayments.totalReceived,
-                                remaining = billWithPayments.remaining
-                            )
-                            CommunicationUtils.sendSms(context, phone, msg)
+                            val invoiceText = CommunicationUtils.buildInvoiceShareText(billWithPayments, company)
+                            CommunicationUtils.shareText(context, "Invoice ${billWithPayments.displayBillNumber}", invoiceText)
                         },
-                        modifier = Modifier.weight(0.9f).height(44.dp)
+                        modifier = Modifier.weight(1f).height(44.dp).testTag("detail_print_btn")
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("SMS")
+                        Text("Invoice")
                     }
                 }
             }
@@ -503,18 +701,28 @@ fun BillDetailScreen(
                 }
             }
 
-            // Additional details at bottom
+            // Requirement 8: Company Footer
             item {
-                if (billWithPayments.bill.notes.isNotBlank()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Order Notes:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(billWithPayments.bill.notes, fontSize = 13.sp)
-                        }
+                        Text(
+                            text = "Thank you for your business!",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "$companyDisplayName • $companyMobile",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
@@ -523,10 +731,6 @@ fun BillDetailScreen(
     }
 }
 
-/**
- * Requirement 7: Payment History item with Edit and Delete
- * "28 Sep — Advance — ₹500 — UPI [✏️ Edit] [🗑️ Delete]"
- */
 @Composable
 private fun PaymentHistoryItemCard(
     payment: PaymentRecord,

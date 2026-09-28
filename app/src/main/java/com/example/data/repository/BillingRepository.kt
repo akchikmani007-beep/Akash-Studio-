@@ -3,12 +3,30 @@ package com.example.data.repository
 import com.example.data.local.StudioDao
 import com.example.data.model.BillOrder
 import com.example.data.model.BillWithPayments
+import com.example.data.model.Company
 import com.example.data.model.PaymentRecord
 import com.example.data.model.Photographer
 import kotlinx.coroutines.flow.Flow
 
 class BillingRepository(private val dao: StudioDao) {
 
+    // Companies
+    val allCompanies: Flow<List<Company>> = dao.getAllCompanies()
+
+    fun getCompanyById(id: Long): Flow<Company?> = dao.getCompanyById(id)
+
+    suspend fun getCompanyByIdSync(id: Long): Company? = dao.getCompanyByIdSync(id)
+
+    suspend fun insertCompany(company: Company): Long = dao.insertCompany(company)
+
+    suspend fun updateCompany(company: Company) = dao.updateCompany(company)
+
+    suspend fun deleteCompany(company: Company) = dao.deleteCompany(company)
+
+    fun getBillsForCompany(companyId: Long): Flow<List<BillWithPayments>> =
+        dao.getBillsForCompany(companyId)
+
+    // Photographers
     val allPhotographers: Flow<List<Photographer>> = dao.getAllPhotographers()
     val allBills: Flow<List<BillWithPayments>> = dao.getAllBillsWithPayments()
 

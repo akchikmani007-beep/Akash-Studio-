@@ -9,12 +9,35 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.model.BillOrder
 import com.example.data.model.BillWithPayments
+import com.example.data.model.Company
 import com.example.data.model.PaymentRecord
 import com.example.data.model.Photographer
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface StudioDao {
+
+    // Company operations
+    @Query("SELECT * FROM companies ORDER BY name ASC")
+    fun getAllCompanies(): Flow<List<Company>>
+
+    @Query("SELECT * FROM companies WHERE id = :id")
+    fun getCompanyById(id: Long): Flow<Company?>
+
+    @Query("SELECT * FROM companies WHERE id = :id")
+    suspend fun getCompanyByIdSync(id: Long): Company?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCompany(company: Company): Long
+
+    @Update
+    suspend fun updateCompany(company: Company)
+
+    @Delete
+    suspend fun deleteCompany(company: Company)
+
+    @Query("DELETE FROM companies WHERE id = :id")
+    suspend fun deleteCompanyById(id: Long)
 
     // Photographer operations
     @Query("SELECT * FROM photographers ORDER BY name ASC")
@@ -44,6 +67,10 @@ interface StudioDao {
     @Transaction
     @Query("SELECT * FROM bill_orders WHERE photographerId = :photographerId ORDER BY createdDate DESC")
     fun getBillsForPhotographer(photographerId: Long): Flow<List<BillWithPayments>>
+
+    @Transaction
+    @Query("SELECT * FROM bill_orders WHERE companyId = :companyId ORDER BY createdDate DESC")
+    fun getBillsForCompany(companyId: Long): Flow<List<BillWithPayments>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBill(bill: BillOrder): Long

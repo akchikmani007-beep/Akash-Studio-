@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,9 +20,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,9 +36,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -52,9 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.AddEditCompanyDialog
 import com.example.ui.components.AddPhotographerDialog
+import com.example.ui.components.CompanyLogoBadge
 import com.example.ui.components.LiveBillSummaryCard
-import com.example.ui.components.formatRupee
 import com.example.ui.viewmodel.BillingViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,13 +70,30 @@ fun NewBillScreen(
 ) {
     val formState by viewModel.newBillForm.collectAsState()
     val photographers by viewModel.allPhotographers.collectAsState()
+    val companies by viewModel.allCompanies.collectAsState()
 
     var showAddPhotogDialog by remember { mutableStateOf(false) }
+    var showAddCompanyDialog by remember { mutableStateOf(false) }
+    var companyDropdownExpanded by remember { mutableStateOf(false) }
     var photogDropdownExpanded by remember { mutableStateOf(false) }
     var methodDropdownExpanded by remember { mutableStateOf(false) }
 
     val paymentMethods = listOf("UPI", "Cash", "Bank Transfer", "Cheque")
+    val selectedCompany = companies.firstOrNull { it.id == formState.selectedCompanyId }
     val selectedPhotographer = photographers.firstOrNull { it.id == formState.selectedPhotographerId }
+
+    if (showAddCompanyDialog) {
+        AddEditCompanyDialog(
+            initialCompany = null,
+            onDismiss = { showAddCompanyDialog = false },
+            onConfirm = { name, owner, address, mobile, email, gst, logoTag, details ->
+                viewModel.addCompany(name, owner, address, mobile, email, gst, logoTag, details) { newCompanyId ->
+                    viewModel.updateSelectedCompany(newCompanyId)
+                    showAddCompanyDialog = false
+                }
+            }
+        )
+    }
 
     if (showAddPhotogDialog) {
         AddPhotographerDialog(
@@ -112,7 +133,7 @@ fun NewBillScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Live Financial Summary right near top/middle so it's always immediately clear
+            // Live Financial Summary right near top so it updates in real time
             LiveBillSummaryCard(
                 totalBill = formState.calculatedTotalBill,
                 received = formState.calculatedReceived,
@@ -122,7 +143,136 @@ fun NewBillScreen(
                 modifier = Modifier.testTag("live_bill_summary_card")
             )
 
-            // Section 1: Photographer & Customer
+            // Section 1: Requirement 3 - Prominent Company Selection
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "SELECT COMPANY / STUDIO *",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        if (selectedCompany != null) {
+                            Text(
+                                text = "GST: ${selectedCompany.gstNumber.ifBlank { "N/A" }}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ExposedDropdownMenuBox(
+                            expanded = companyDropdownExpanded,
+                            onExpandedChange = { companyDropdownExpanded = it },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            OutlinedTextField(
+                                value = selectedCompany?.name ?: "",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Billing Studio / Company *") },
+                                placeholder = { Text("Select Company / Studio") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = companyDropdownExpanded) },
+                                leadingIcon = selectedCompany?.let {
+                                    { CompanyLogoBadge(company = it, size = 26) }
+                                },
+                                isError = formState.selectedCompanyId == null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                    .testTag("company_selector")
+                            )
+                            ExposedDropdownMenu(
+                                expanded = companyDropdownExpanded,
+                                onDismissRequest = { companyDropdownExpanded = false }
+                            ) {
+                                companies.forEach { comp ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CompanyLogoBadge(company = comp, size = 28)
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(comp.name, fontWeight = FontWeight.Bold)
+                                                    if (comp.ownerName.isNotBlank() || comp.mobileNumber.isNotBlank()) {
+                                                        Text(
+                                                            "${comp.ownerName} • ${comp.mobileNumber}",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.updateSelectedCompany(comp.id)
+                                            companyDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { showAddCompanyDialog = true },
+                            modifier = Modifier.testTag("quick_add_company_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add Company",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (selectedCompany != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                                Text(
+                                    text = "Header details: ${selectedCompany.name} | ${selectedCompany.mobileNumber}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (selectedCompany.address.isNotBlank()) {
+                                    Text(
+                                        text = selectedCompany.address,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 2: Photographer & Customer Details (Requirement 7)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -134,7 +284,7 @@ fun NewBillScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "ORDER DETAILS",
+                        text = "CUSTOMER & PHOTOGRAPHER DETAILS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -198,7 +348,7 @@ fun NewBillScreen(
                         }
                     }
 
-                    // Customer Name
+                    // Customer Name (Required)
                     OutlinedTextField(
                         value = formState.customerName,
                         onValueChange = { viewModel.updateCustomerName(it) },
@@ -207,11 +357,66 @@ fun NewBillScreen(
                         singleLine = true
                     )
 
-                    // Album Type
+                    // Customer Phone & Bill Number (Row)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = formState.customerPhone,
+                            onValueChange = { viewModel.updateCustomerPhone(it) },
+                            label = { Text("Customer Phone") },
+                            placeholder = { Text("98xxxxxxxx") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            modifier = Modifier.weight(1f).testTag("customer_phone_input"),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = formState.billNumber,
+                            onValueChange = { viewModel.updateBillNumber(it) },
+                            label = { Text("Bill Number (Optional)") },
+                            placeholder = { Text("Auto") },
+                            modifier = Modifier.weight(1f).testTag("bill_number_input"),
+                            singleLine = true
+                        )
+                    }
+
+                    // Customer Address
+                    OutlinedTextField(
+                        value = formState.customerAddress,
+                        onValueChange = { viewModel.updateCustomerAddress(it) },
+                        label = { Text("Customer Address (Optional)") },
+                        placeholder = { Text("City / Town") },
+                        modifier = Modifier.fillMaxWidth().testTag("customer_address_input"),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Section 3: Album & Service Details
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "SERVICE & ALBUM CHARGES",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp
+                    )
+
+                    // Album Type / Event Service Details
                     OutlinedTextField(
                         value = formState.albumType,
                         onValueChange = { viewModel.updateAlbumType(it) },
-                        label = { Text("Album Type (e.g. Wedding Album)") },
+                        label = { Text("Album Type / Service (e.g. Wedding Album)") },
                         modifier = Modifier.fillMaxWidth().testTag("album_type_input"),
                         singleLine = true
                     )
@@ -224,7 +429,7 @@ fun NewBillScreen(
                         OutlinedTextField(
                             value = formState.pagesText,
                             onValueChange = { viewModel.updatePages(it) },
-                            label = { Text("Pages *") },
+                            label = { Text("Pages / Qty *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f).testTag("pages_input"),
                             singleLine = true
@@ -274,7 +479,7 @@ fun NewBillScreen(
                 }
             }
 
-            // Section 2: Payment Received
+            // Section 4: Payment Received
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -308,7 +513,7 @@ fun NewBillScreen(
                         } else null
                     )
 
-                    // Compact Row: Method
+                    // Payment Method selector
                     ExposedDropdownMenuBox(
                         expanded = methodDropdownExpanded,
                         onExpandedChange = { methodDropdownExpanded = it }
@@ -340,7 +545,7 @@ fun NewBillScreen(
                         }
                     }
 
-                    // Notes
+                    // Order Notes
                     OutlinedTextField(
                         value = formState.notes,
                         onValueChange = { viewModel.updateNotes(it) },

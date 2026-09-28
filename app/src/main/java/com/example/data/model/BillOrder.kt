@@ -15,14 +15,19 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("photographerId")]
+    indices = [Index("photographerId"), Index("companyId")]
 )
 data class BillOrder(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val photographerId: Long,
     val photographerName: String,
+    val companyId: Long? = null,
+    val companyName: String = "",
+    val billNumber: String = "",
     val customerName: String,
+    val customerPhone: String = "",
+    val customerAddress: String = "",
     val albumType: String,
     val pages: Int,
     val ratePerPage: Double,

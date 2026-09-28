@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.BillOrder
 import com.example.data.model.BillWithPayments
+import com.example.data.model.Company
 import com.example.data.model.PaymentRecord
 import com.example.data.model.PaymentStatus
 import com.example.data.model.Photographer
@@ -22,8 +23,12 @@ import java.util.Date
 import java.util.Locale
 
 data class NewBillFormState(
+    val selectedCompanyId: Long? = null,
     val selectedPhotographerId: Long? = null,
+    val billNumber: String = "",
     val customerName: String = "",
+    val customerPhone: String = "",
+    val customerAddress: String = "",
     val albumType: String = "Wedding Album",
     val pagesText: String = "",
     val rateText: String = "",
@@ -65,13 +70,17 @@ data class NewBillFormState(
             else -> PaymentStatus.PARTIALLY_PAID
         }
 
+    val hasNegativeAmount: Boolean
+        get() = pages < 0 || rate < 0.0 || extraCharges < 0.0 || discount < 0.0 || advanceAmount < 0.0
+
     val isAdvanceGreaterThanTotal: Boolean
         get() = calculatedTotalBill > 0.0 && advanceAmount > calculatedTotalBill
 
     val validationError: String?
         get() = when {
+            hasNegativeAmount -> "Negative amounts are not allowed."
             isAdvanceGreaterThanTotal -> "Received amount cannot be greater than the total bill."
-            selectedPhotographerId == null -> "Please select a photographer."
+            selectedCompanyId == null -> "Please select a Company / Studio."
             customerName.isBlank() -> "Please enter customer name."
             pages <= 0 -> "Pages must be greater than 0."
             rate <= 0.0 -> "Rate must be greater than 0."
@@ -108,17 +117,31 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
         repository = BillingRepository(db.studioDao())
     }
 
+    // Companies
+    val allCompanies: StateFlow<List<Company>> = repository.allCompanies
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Company Filter for billing history & dashboard (null = All Companies)
+    val selectedCompanyFilter = MutableStateFlow<Long?>(null)
+
+    // Photographers & Bills
     val allBills: StateFlow<List<BillWithPayments>> = repository.allBills
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allPhotographers: StateFlow<List<Photographer>> = repository.allPhotographers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Filtered bills based on company filter
+    val filteredBills: StateFlow<List<BillWithPayments>> =
+        combine(allBills, selectedCompanyFilter) { bills, companyId ->
+            if (companyId == null) bills else bills.filter { it.bill.companyId == companyId }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Form state for creating a new bill
     val newBillForm = MutableStateFlow(NewBillFormState())
 
-    // Dashboard metrics automatically computed from bills
-    val dashboardMetrics: StateFlow<DashboardMetrics> = allBills.combine(allBills) { bills, _ ->
+    // Dashboard metrics automatically computed from filtered bills
+    val dashboardMetrics: StateFlow<DashboardMetrics> = filteredBills.combine(filteredBills) { bills, _ ->
         val totalBilling = bills.sumOf { it.totalBill }
         val totalReceived = bills.sumOf { it.totalReceived }
         val totalRemaining = bills.sumOf { it.remaining }
@@ -158,7 +181,7 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Monthly reports
-    val monthlyReports: StateFlow<List<MonthlyReport>> = allBills.combine(allBills) { bills, _ ->
+    val monthlyReports: StateFlow<List<MonthlyReport>> = filteredBills.combine(filteredBills) { bills, _ ->
         val formatter = SimpleDateFormat("MMM yyyy", Locale.getDefault())
         val grouped = bills.groupBy { formatter.format(Date(it.bill.createdDate)) }
         grouped.map { (monthYear, groupBills) ->
@@ -180,17 +203,85 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Reminders (Bills that are not fully paid and remaining > 0)
-    val pendingReminders: StateFlow<List<BillWithPayments>> = allBills.combine(allBills) { bills, _ ->
+    val pendingReminders: StateFlow<List<BillWithPayments>> = filteredBills.combine(filteredBills) { bills, _ ->
         bills.filter { it.isPendingReminder }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Company filter switcher
+    fun setCompanyFilter(companyId: Long?) {
+        selectedCompanyFilter.value = companyId
+    }
+
+    // Company CRUD
+    fun addCompany(
+        name: String,
+        ownerName: String,
+        address: String,
+        mobileNumber: String,
+        email: String,
+        gstNumber: String,
+        logoTag: String = "camera",
+        otherDetails: String = "",
+        onCreated: (Long) -> Unit
+    ) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val id = repository.insertCompany(
+                Company(
+                    name = name.trim(),
+                    ownerName = ownerName.trim(),
+                    address = address.trim(),
+                    mobileNumber = mobileNumber.trim(),
+                    email = email.trim(),
+                    gstNumber = gstNumber.trim(),
+                    logoTag = logoTag,
+                    otherDetails = otherDetails.trim()
+                )
+            )
+            onCreated(id)
+        }
+    }
+
+    fun updateCompany(company: Company, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.updateCompany(company)
+            onComplete()
+        }
+    }
+
+    fun deleteCompany(company: Company, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.deleteCompany(company)
+            if (selectedCompanyFilter.value == company.id) {
+                selectedCompanyFilter.value = null
+            }
+            onComplete()
+        }
+    }
+
     // New Bill Form updates
+    fun updateSelectedCompany(id: Long?) {
+        newBillForm.value = newBillForm.value.copy(selectedCompanyId = id)
+    }
+
     fun updateSelectedPhotographer(id: Long) {
         newBillForm.value = newBillForm.value.copy(selectedPhotographerId = id)
     }
 
+    fun updateBillNumber(number: String) {
+        newBillForm.value = newBillForm.value.copy(billNumber = number)
+    }
+
     fun updateCustomerName(name: String) {
         newBillForm.value = newBillForm.value.copy(customerName = name)
+    }
+
+    fun updateCustomerPhone(phone: String) {
+        newBillForm.value = newBillForm.value.copy(customerPhone = phone)
+    }
+
+    fun updateCustomerAddress(address: String) {
+        newBillForm.value = newBillForm.value.copy(customerAddress = address)
     }
 
     fun updateAlbumType(albumType: String) {
@@ -235,14 +326,25 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveNewBill(onSuccess: (Long) -> Unit) {
         val state = newBillForm.value
+        val companyId = state.selectedCompanyId ?: return
+        val company = allCompanies.value.firstOrNull { it.id == companyId }
+        val companyName = company?.name ?: "Unknown Studio"
+
         val photogId = state.selectedPhotographerId ?: return
         val photographer = allPhotographers.value.firstOrNull { it.id == photogId }
         val photogName = photographer?.name ?: "Unknown Photographer"
 
+        val billNum = state.billNumber.ifBlank { "INV-${(System.currentTimeMillis() % 100000)}" }
+
         val bill = BillOrder(
+            companyId = companyId,
+            companyName = companyName,
             photographerId = photogId,
             photographerName = photogName,
+            billNumber = billNum,
             customerName = state.customerName.trim(),
+            customerPhone = state.customerPhone.trim(),
+            customerAddress = state.customerAddress.trim(),
             albumType = state.albumType.trim().ifEmpty { "Photo Album" },
             pages = state.pages,
             ratePerPage = state.rate,

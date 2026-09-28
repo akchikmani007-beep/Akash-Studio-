@@ -6,12 +6,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Notifications
@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.ui.screens.BillDetailScreen
+import com.example.ui.screens.CompaniesScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.NewBillScreen
 import com.example.ui.screens.PhotographerDetailScreen
@@ -47,6 +48,7 @@ import com.example.ui.viewmodel.BillingViewModel
 
 sealed class Screen {
     data object Dashboard : Screen()
+    data object Companies : Screen()
     data object Photographers : Screen()
     data object NewBill : Screen()
     data object Reminders : Screen()
@@ -57,6 +59,7 @@ sealed class Screen {
 
 enum class MainTab(val title: String, val icon: ImageVector, val screen: Screen) {
     DASHBOARD("Home", Icons.Default.Dashboard, Screen.Dashboard),
+    COMPANIES("Studios", Icons.Default.Business, Screen.Companies),
     PHOTOGRAPHERS("Photographers", Icons.Default.CameraAlt, Screen.Photographers),
     NEW_BILL("New Bill", Icons.Default.ReceiptLong, Screen.NewBill),
     REMINDERS("Reminders", Icons.Default.Notifications, Screen.Reminders),
@@ -136,8 +139,9 @@ fun StudioApp(viewModel: BillingViewModel) {
                             label = {
                                 Text(
                                     text = tab.title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1
                                 )
                             },
                             modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
@@ -156,9 +160,17 @@ fun StudioApp(viewModel: BillingViewModel) {
                 is Screen.Dashboard -> DashboardScreen(
                     viewModel = viewModel,
                     onNavigateToNewBill = { switchTab(MainTab.NEW_BILL) },
+                    onNavigateToCompanies = { switchTab(MainTab.COMPANIES) },
                     onNavigateToReminders = { switchTab(MainTab.REMINDERS) },
                     onBillClick = { billId -> navigateTo(Screen.BillDetail(billId)) },
                     onSeeAllBills = { switchTab(MainTab.PHOTOGRAPHERS) }
+                )
+                is Screen.Companies -> CompaniesScreen(
+                    viewModel = viewModel,
+                    onViewCompanyBills = { companyId ->
+                        viewModel.setCompanyFilter(companyId)
+                        switchTab(MainTab.DASHBOARD)
+                    }
                 )
                 is Screen.Photographers -> PhotographersScreen(
                     viewModel = viewModel,

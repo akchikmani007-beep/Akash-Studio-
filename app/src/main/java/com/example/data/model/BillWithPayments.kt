@@ -38,6 +38,9 @@ data class BillWithPayments(
 
     val isPendingReminder: Boolean
         get() = status != PaymentStatus.FULLY_PAID && remaining > 0.0
+
+    val displayBillNumber: String
+        get() = if (bill.billNumber.isNotBlank()) bill.billNumber else "INV-${1000 + bill.id}"
 }
 
 data class PhotographerSummary(

@@ -4,7 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import com.example.data.model.BillWithPayments
+import com.example.data.model.Company
 import com.example.ui.components.formatRupee
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object CommunicationUtils {
 
@@ -16,8 +21,12 @@ object CommunicationUtils {
         customerName: String,
         totalBill: Double,
         received: Double,
-        remaining: Double
+        remaining: Double,
+        companyName: String = STUDIO_NAME,
+        companyPhone: String = STUDIO_PHONE
     ): String {
+        val name = if (companyName.isNotBlank()) companyName else STUDIO_NAME
+        val phone = if (companyPhone.isNotBlank()) companyPhone else STUDIO_PHONE
         return """
 Hello $photographerName,
 
@@ -30,16 +39,20 @@ Received: ${formatRupee(received)}
 Remaining: ${formatRupee(remaining)}
 
 Thank you.
-$STUDIO_NAME
-$STUDIO_PHONE
+$name
+$phone
         """.trimIndent()
     }
 
     fun buildReminderMessage(
         photographerName: String,
         customerName: String,
-        remaining: Double
+        remaining: Double,
+        companyName: String = STUDIO_NAME,
+        companyPhone: String = STUDIO_PHONE
     ): String {
+        val name = if (companyName.isNotBlank()) companyName else STUDIO_NAME
+        val phone = if (companyPhone.isNotBlank()) companyPhone else STUDIO_PHONE
         return """
 Hello $photographerName,
 
@@ -51,8 +64,57 @@ Pending Amount: ${formatRupee(remaining)}
 Please arrange for payment at your earliest convenience.
 
 Thank you.
-$STUDIO_NAME
-$STUDIO_PHONE
+$name
+$phone
+        """.trimIndent()
+    }
+
+    fun buildInvoiceShareText(
+        billWithPayments: BillWithPayments,
+        company: Company?
+    ): String {
+        val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+        val dateStr = formatter.format(Date(billWithPayments.bill.createdDate))
+        val compName = company?.name ?: billWithPayments.bill.companyName.ifBlank { STUDIO_NAME }
+        val compPhone = company?.mobileNumber ?: STUDIO_PHONE
+        val compAddress = company?.address ?: ""
+        val compGst = if (!company?.gstNumber.isNullOrBlank()) "GST: ${company?.gstNumber}\n" else ""
+
+        val billNumber = billWithPayments.displayBillNumber
+
+        return """
+═════════════════════════════════
+         TAX INVOICE / BILL      
+═════════════════════════════════
+$compName
+$compAddress
+Phone: $compPhone
+$compGst
+Invoice No : $billNumber
+Bill Date  : $dateStr
+
+BILL TO (CUSTOMER):
+Customer Name : ${billWithPayments.bill.customerName}
+Phone         : ${billWithPayments.bill.customerPhone.ifBlank { "N/A" }}
+Address       : ${billWithPayments.bill.customerAddress.ifBlank { "N/A" }}
+Photographer  : ${billWithPayments.bill.photographerName}
+
+ORDER PARTICULARS:
+Item / Service: ${billWithPayments.bill.albumType}
+Pages / Qty   : ${billWithPayments.bill.pages}
+Rate / Page   : ${formatRupee(billWithPayments.bill.ratePerPage)}
+Subtotal      : ${formatRupee(billWithPayments.bill.pages * billWithPayments.bill.ratePerPage)}
+Extra Charges : ${formatRupee(billWithPayments.bill.extraCharges)}
+Discount      : ${formatRupee(billWithPayments.bill.discount)}
+─────────────────────────────────
+TOTAL BILL    : ${formatRupee(billWithPayments.totalBill)}
+RECEIVED      : ${formatRupee(billWithPayments.totalReceived)}
+REMAINING     : ${formatRupee(billWithPayments.remaining)}
+PAYMENT STATUS: ${billWithPayments.status.emoji} ${billWithPayments.status.label}
+═════════════════════════════════
+Thank you for your business!
+$compName
+═════════════════════════════════
         """.trimIndent()
     }
 
@@ -94,6 +156,19 @@ $STUDIO_PHONE
             context.startActivity(intent)
         } catch (e: Exception) {
             Toast.makeText(context, "Could not dial phone", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun shareText(context: Context, subject: String, body: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        try {
+            context.startActivity(Intent.createChooser(intent, subject))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Could not share invoice", Toast.LENGTH_SHORT).show()
         }
     }
 }
